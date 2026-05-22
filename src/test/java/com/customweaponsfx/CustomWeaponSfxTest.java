@@ -1,13 +1,13 @@
-package com.squeakytoy;
+package com.customweaponsfx;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class SqueakyToyTest
+public class CustomWeaponSfxTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(SqueakyToyPlugin.class);
+		ExternalPluginManager.loadBuiltin(CustomWeaponSfxPlugin.class);
 		RuneLite.main(args);
 	}
 }
