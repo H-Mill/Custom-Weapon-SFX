@@ -97,11 +97,13 @@ public class CustomWeaponSfxPlugin extends Plugin
 
 		loadWeaponEntries();
 		loadDefaultGroups(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX);
+		seedFirstRunGroups(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX);
 		loadDefaultGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX);
+		seedFirstRunGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX);
 		bundledSounds = scanBundledSounds();
 		availableSounds = scanSounds();
 
-		panel = new CustomWeaponSfxPanel(configManager, itemManager, this::openWeaponSearch, this::removeWeapon, this::refreshSounds, this::playSoundFile);
+		panel = new CustomWeaponSfxPanel(configManager, itemManager, this::openWeaponSearch, this::removeWeapon, this::refreshSounds, this::playSoundFile, this::resetAllData);
 
 		navButton = NavigationButton.builder()
 			.tooltip("Custom Weapon SFX")
@@ -204,6 +206,45 @@ public class CustomWeaponSfxPlugin extends Plugin
 		if (weaponId >= 0) return;
 
 		buffer(UNARMED_KEY, unarmedGroups, false, amount, isMax, tick);
+	}
+
+	private void resetAllData()
+	{
+		for (WeaponEntry entry : weaponEntries)
+		{
+			int itemId = entry.getItemId();
+			for (int i = 0; i < entry.getGroups().size(); i++)
+			{
+				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_triggers");
+				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_sound");
+				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_volume");
+			}
+			configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_name");
+			configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_groupCount");
+		}
+		configManager.unsetConfiguration(CONFIG_GROUP, "specWeaponIds");
+		weaponEntries.clear();
+
+		clearDefaultGroupConfig(CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX, unarmedGroups.size());
+		unarmedGroups.clear();
+		clearDefaultGroupConfig(CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, receivedGroups.size());
+		receivedGroups.clear();
+
+		addDefaultGroup(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX);
+		addDefaultGroup(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX);
+
+		rebuildPanel();
+	}
+
+	private void clearDefaultGroupConfig(String prefix, int count)
+	{
+		configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_groupCount");
+		for (int i = 0; i < count; i++)
+		{
+			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_triggers");
+			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_sound");
+			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_volume");
+		}
 	}
 
 	private void buffer(int key, List<TriggerGroup> groups,
@@ -415,6 +456,24 @@ public class CustomWeaponSfxPlugin extends Plugin
 		{
 			log.debug("Skipping invalid groupCount for {}", prefix);
 		}
+	}
+
+	private void seedFirstRunGroups(List<TriggerGroup> list, String prefix)
+	{
+		if (!list.isEmpty()) return;
+		if (configManager.getConfiguration(CONFIG_GROUP, prefix + "_groupCount") != null) return;
+		addDefaultGroup(list, prefix);
+	}
+
+	private void addDefaultGroup(List<TriggerGroup> list, String prefix)
+	{
+		TriggerGroup group = new TriggerGroup(EnumSet.of(Triggers.REGULAR_ZERO), "", 75);
+		list.add(group);
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_groupCount", 1);
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_triggers",
+			TriggerGroup.serializeTriggers(group.getTriggers()));
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_sound", group.getSoundFile());
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_volume", group.getVolume());
 	}
 
 	private TriggerGroup loadGroup(String keyPrefix)

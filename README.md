@@ -33,3 +33,7 @@ A RuneLite plugin that plays configurable sound effects on player actions, with 
 ### Adding multiple sounds to one weapon
 
 Each weapon (or the unarmed/received sections) supports multiple sound groups. Click **+ Add Sound Group** inside an expanded entry to add another group with its own sound, volume, and trigger set.
+
+### Resetting all data
+
+Click **Reset All Data** in the panel to wipe all saved weapon entries and sound groups and restore the unarmed and received sections to their defaults. A confirmation dialog will appear before anything is deleted.

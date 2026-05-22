@@ -15,6 +15,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
+import javax.swing.JOptionPane;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -48,6 +49,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	private final Consumer<Integer> onRemoveWeapon;
 	private final Runnable onRefreshSounds;
 	private final BiConsumer<String, Integer> onTestSound;
+	private final Runnable onReset;
 
 	private final JPanel weaponListPanel;
 
@@ -56,7 +58,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		Runnable onOpenSearch,
 		Consumer<Integer> onRemoveWeapon,
 		Runnable onRefreshSounds,
-		BiConsumer<String, Integer> onTestSound)
+		BiConsumer<String, Integer> onTestSound,
+		Runnable onReset)
 	{
 		this.configManager = configManager;
 		this.itemManager = itemManager;
@@ -64,6 +67,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		this.onRemoveWeapon = onRemoveWeapon;
 		this.onRefreshSounds = onRefreshSounds;
 		this.onTestSound = onTestSound;
+		this.onReset = onReset;
 
 		setLayout(new BorderLayout());
 		setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -116,6 +120,29 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		btnRow.add(refreshBtn);
 
 		top.add(btnRow);
+		top.add(Box.createVerticalStrut(4));
+
+		JPanel resetRow = new JPanel();
+		resetRow.setLayout(new javax.swing.BoxLayout(resetRow, javax.swing.BoxLayout.X_AXIS));
+		resetRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+		JButton resetBtn = new JButton("Reset All Data");
+		resetBtn.setForeground(Color.RED);
+		resetBtn.setToolTipText("Wipe all saved weapon entries and sound groups, then restore defaults");
+		resetBtn.addActionListener(e ->
+		{
+			int confirm = JOptionPane.showConfirmDialog(
+				this,
+				"Reset all weapons and sound groups back to defaults?",
+				"Reset All Data",
+				JOptionPane.YES_NO_OPTION,
+				JOptionPane.WARNING_MESSAGE
+			);
+			if (confirm == JOptionPane.YES_OPTION) onReset.run();
+		});
+		resetRow.add(resetBtn);
+
+		top.add(resetRow);
 		top.add(Box.createVerticalStrut(10));
 
 		return top;
@@ -262,7 +289,17 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		JButton removeBtn = new JButton("Remove");
 		removeBtn.setMargin(new java.awt.Insets(2, 5, 2, 5));
 		removeBtn.setForeground(Color.RED);
-		removeBtn.addActionListener(e -> onRemoveWeapon.accept(entry.getItemId()));
+		removeBtn.addActionListener(e ->
+		{
+			int confirm = JOptionPane.showConfirmDialog(
+				this,
+				"Remove " + entry.getWeaponName() + " and all its sound groups?",
+				"Remove Weapon",
+				JOptionPane.YES_NO_OPTION,
+				JOptionPane.WARNING_MESSAGE
+			);
+			if (confirm == JOptionPane.YES_OPTION) onRemoveWeapon.accept(entry.getItemId());
+		});
 		headerRow.add(removeBtn, BorderLayout.EAST);
 
 		panel.add(headerRow);
@@ -333,6 +370,14 @@ public class CustomWeaponSfxPanel extends PluginPanel
 				removeGroupBtn.setForeground(Color.RED);
 				removeGroupBtn.addActionListener(e ->
 				{
+					int confirm = JOptionPane.showConfirmDialog(
+						this,
+						"Remove Sound " + (idx + 1) + "?",
+						"Remove Sound Group",
+						JOptionPane.YES_NO_OPTION,
+						JOptionPane.WARNING_MESSAGE
+					);
+					if (confirm != JOptionPane.YES_OPTION) return;
 					groups.remove(idx);
 					onSave.run();
 					rebuildGroupsSection(holder, groups, availableSounds, onSave);
