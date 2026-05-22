@@ -47,9 +47,10 @@ import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Custom Weapon SFX",
-	description = "Plays a custom sound effect on configurable player actions",
-	tags = {"custom", "weapon", "sound", "sfx"}
+		name = "Custom Weapon SFX",
+		description = "Plays a custom sound effect on configurable player actions",
+		tags = {"custom", "weapon", "sound", "sfx"},
+		configName = "squeakytoy"
 )
 public class CustomWeaponSfxPlugin extends Plugin
 {
