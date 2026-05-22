@@ -35,8 +35,9 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	static final String BUNDLED_PREFIX = "bundled:";
 	private static final String BUILTIN_SUFFIX = " (built-in)";
 
-	static final String UNARMED_GROUPS_PREFIX = "defaultAttack";
+	static final String UNARMED_GROUPS_PREFIX  = "defaultAttack";
 	static final String RECEIVED_GROUPS_PREFIX = "defaultReceived";
+	static final String THRALL_GROUPS_PREFIX   = "defaultThrall";
 
 
 	private List<String> bundledSounds = new ArrayList<>();
@@ -149,7 +150,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	}
 
 	public void rebuild(List<WeaponEntry> weapons, List<String> availableSounds,
-		List<String> bundledSounds, List<TriggerGroup> unarmedGroups, List<TriggerGroup> receivedGroups)
+		List<String> bundledSounds, List<TriggerGroup> unarmedGroups,
+		List<TriggerGroup> receivedGroups, List<TriggerGroup> thrallGroups)
 	{
 		this.bundledSounds = bundledSounds;
 		SwingUtilities.invokeLater(() ->
@@ -157,11 +159,18 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			weaponListPanel.removeAll();
 
 			weaponListPanel.add(buildDefaultRowGroups(
-				"Player Attacks (Unarmed)", UNARMED_GROUPS_PREFIX, unarmedGroups, availableSounds));
+				"Player Attacks (Unarmed)", UNARMED_GROUPS_PREFIX, unarmedGroups, availableSounds,
+				EnumSet.of(Triggers.REGULAR_ZERO, Triggers.REGULAR_HIT, Triggers.REGULAR_MAX, Triggers.ALL)));
 			weaponListPanel.add(Box.createVerticalStrut(4));
 
 			weaponListPanel.add(buildDefaultRowGroups(
-				"Received Attacks", RECEIVED_GROUPS_PREFIX, receivedGroups, availableSounds));
+				"Received Attacks", RECEIVED_GROUPS_PREFIX, receivedGroups, availableSounds,
+				EnumSet.of(Triggers.REGULAR_ZERO, Triggers.REGULAR_HIT, Triggers.ALL)));
+			weaponListPanel.add(Box.createVerticalStrut(4));
+
+			weaponListPanel.add(buildDefaultRowGroups(
+				"Thrall Attacks", THRALL_GROUPS_PREFIX, thrallGroups, availableSounds,
+				EnumSet.of(Triggers.THRALL_HIT)));
 			weaponListPanel.add(Box.createVerticalStrut(8));
 
 			for (int i = 0; i < weapons.size(); i++)
@@ -176,7 +185,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	}
 
 	private JPanel buildDefaultRowGroups(String label, String prefix,
-		List<TriggerGroup> groups, List<String> availableSounds)
+		List<TriggerGroup> groups, List<String> availableSounds, Set<Triggers> visibleTriggers)
 	{
 		boolean collapsed = !expandedDefaults.contains(prefix);
 
@@ -214,7 +223,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		groupsHolder.setAlignmentX(Component.LEFT_ALIGNMENT);
 		groupsHolder.setVisible(!collapsed);
 		rebuildGroupsSection(groupsHolder, groups, availableSounds,
-			() -> saveDefaultGroupsFromPanel(prefix, groups));
+			() -> saveDefaultGroupsFromPanel(prefix, groups), visibleTriggers);
 		panel.add(groupsHolder);
 
 		collapseBtn.addActionListener(e ->
@@ -314,7 +323,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		groupsHolder.setAlignmentX(Component.LEFT_ALIGNMENT);
 		groupsHolder.setVisible(!collapsed);
 		rebuildGroupsSection(groupsHolder, entry.getGroups(), availableSounds,
-			() -> saveWeaponGroupsFromPanel(entry));
+			() -> saveWeaponGroupsFromPanel(entry),
+			EnumSet.complementOf(EnumSet.of(Triggers.THRALL_HIT)));
 		panel.add(groupsHolder);
 
 		collapseBtn.addActionListener(e ->
@@ -336,7 +346,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	}
 
 	private void rebuildGroupsSection(JPanel holder, List<TriggerGroup> groups,
-		List<String> availableSounds, Runnable onSave)
+		List<String> availableSounds, Runnable onSave, Set<Triggers> visibleTriggers)
 	{
 		holder.removeAll();
 
@@ -380,7 +390,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 					if (confirm != JOptionPane.YES_OPTION) return;
 					groups.remove(idx);
 					onSave.run();
-					rebuildGroupsSection(holder, groups, availableSounds, onSave);
+					rebuildGroupsSection(holder, groups, availableSounds, onSave, visibleTriggers);
 				});
 				groupHeader.add(removeGroupBtn, BorderLayout.EAST);
 			}
@@ -391,7 +401,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			groupPanel.add(Box.createVerticalStrut(4));
 			groupPanel.add(buildVolumeRowGroup(group, onSave));
 			groupPanel.add(Box.createVerticalStrut(4));
-			groupPanel.add(buildTriggersPanel(group.getTriggers(), onSave));
+			groupPanel.add(buildTriggersPanel(group.getTriggers(), onSave, visibleTriggers));
 
 			holder.add(groupPanel);
 			if (i < groups.size() - 1)
@@ -405,7 +415,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		{
 			groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), "", 75));
 			onSave.run();
-			rebuildGroupsSection(holder, groups, availableSounds, onSave);
+			rebuildGroupsSection(holder, groups, availableSounds, onSave, visibleTriggers);
 		});
 		holder.add(addGroupBtn);
 
@@ -413,7 +423,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		holder.repaint();
 	}
 
-	private JPanel buildTriggersPanel(Set<Triggers> enabledTriggers, Runnable onSave)
+	private JPanel buildTriggersPanel(Set<Triggers> enabledTriggers, Runnable onSave, Set<Triggers> visibleTriggers)
 	{
 		JPanel panel = new JPanel();
 		panel.setLayout(new javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS));
@@ -428,6 +438,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 
 		for (Triggers trigger : Triggers.values())
 		{
+			if (!visibleTriggers.contains(trigger)) continue;
 			JCheckBox box = new JCheckBox(trigger.getName());
 			box.setForeground(Color.LIGHT_GRAY);
 			box.setBackground(ColorScheme.DARK_GRAY_COLOR);
