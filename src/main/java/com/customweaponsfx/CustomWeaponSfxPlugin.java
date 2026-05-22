@@ -50,7 +50,7 @@ import net.runelite.client.util.ImageUtil;
 		name = "Custom Weapon SFX",
 		description = "Plays a custom sound effect on configurable player actions",
 		tags = {"custom", "weapon", "sound", "sfx"},
-		configName = "squeakytoy"
+		configName = "SqueakyToyPlugin"
 )
 public class CustomWeaponSfxPlugin extends Plugin
 {
