@@ -33,4 +33,4 @@ Click **Reset All Data** to clear all weapons and sound groups. A confirmation d
 
 ### Known "Issues"
 
-If you have a thrall out, and you have a "Regular attack zero" trigger set, thrall zeros will cause this sfx to play. Sorry, this isn't worth trying to figure out, due to lack of data that is provided, thrall hits are basically indistinguishable from player hits when it comes to hitting zeros. If Jagex ever provides more data alongside thrall hits, i'd love to fix this.
+If you have a thrall out, and you have a "Regular attack zero" or "All attacks" trigger set, thrall zeros/damage will cause the sfx to play. Sorry, this isn't worth trying to figure out, due to lack of data that is provided, thrall hits are basically indistinguishable from player hits when it comes to hitting zeros. If Jagex ever provides more data alongside thrall hits, i'd love to fix this.

@@ -33,7 +33,6 @@ import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
-import net.runelite.api.events.StatChanged;
 import net.runelite.client.RuneLite;
 import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.callback.ClientThread;
@@ -86,7 +85,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 	private final Map<Integer, PendingAttack> pendingAttacks = new HashMap<>();
 	private int pendingAttackTick = -1;
 
-	private int lastXpDropTick = -1;
 	private final List<DeferredHit> deferredHits = new ArrayList<>();
 
 	@Override
@@ -138,7 +136,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 		pendingAttacks.clear();
 		pendingAttackTick = -1;
 
-		lastXpDropTick = -1;
 		deferredHits.clear();
 
 		log.debug("Custom Weapon SFX stopped!");
@@ -172,13 +169,12 @@ public class CustomWeaponSfxPlugin extends Plugin
 		if (!pendingAttacks.isEmpty())
 		{
 			boolean specHitsplatSeen = false;
-			boolean xpDropOccurred = lastXpDropTick == pendingAttackTick;
 			for (PendingAttack attack : pendingAttacks.values())
 			{
 				boolean anyMax  = attack.isMaxList.contains(true);
 				boolean anyHit  = attack.amounts.stream().anyMatch(a -> a > 0);
 				boolean allZero = attack.amounts.stream().allMatch(a -> a == 0);
-				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, anyMax, xpDropOccurred);
+				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, anyMax);
 				if (attack.wasSpec) specHitsplatSeen = true;
 			}
 			pendingAttacks.clear();
@@ -190,21 +186,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 				pendingSpecItemId = -1;
 				pendingSpecTick   = -1;
 			}
-		}
-	}
-
-	@Subscribe
-	public void onStatChanged(StatChanged event)
-	{
-		switch (event.getSkill())
-		{
-			case ATTACK:
-			case STRENGTH:
-			case DEFENCE:
-			case HITPOINTS:
-			case RANGED:
-			case MAGIC:
-				lastXpDropTick = client.getTickCount();
 		}
 	}
 
@@ -532,7 +513,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 	}
 
 	private void fireMatchingGroups(List<TriggerGroup> groups, boolean wasSpec,
-									boolean anyHit, boolean allZero, boolean anyMax, boolean xpDropOccurred)
+									boolean anyHit, boolean allZero, boolean anyMax)
 	{
 		for (TriggerGroup group : groups)
 		{
@@ -542,7 +523,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 			boolean matches = false;
 			for (Triggers trigger : triggers)
 			{
-				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, anyMax, xpDropOccurred))
+				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, anyMax))
 				{
 					matches = true;
 					break;
@@ -554,7 +535,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 	}
 
 	private static boolean matchesTrigger(Triggers trigger, boolean wasSpec,
-										   boolean anyHit, boolean allZero, boolean anyMax, boolean xpDropOccurred)
+										   boolean anyHit, boolean allZero, boolean anyMax)
 	{
 		switch (trigger)
 		{
@@ -564,7 +545,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 			case SPECIAL_ZERO: return wasSpec && allZero && !anyMax;
 			case SPECIAL_HIT:  return wasSpec && anyHit && !anyMax;
 			case SPECIAL_MAX:  return wasSpec && anyMax;
-			case ALL:          return xpDropOccurred;
+			case ALL:          return anyHit && !anyMax;
 			default:           return false;
 		}
 	}
