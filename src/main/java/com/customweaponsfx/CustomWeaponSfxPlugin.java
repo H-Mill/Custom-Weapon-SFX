@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,9 +31,9 @@ import net.runelite.api.HitsplatID;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
-import net.runelite.api.Skill;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.events.HitsplatApplied;
+import net.runelite.api.events.StatChanged;
 import net.runelite.client.RuneLite;
 import net.runelite.client.audio.AudioPlayer;
 import net.runelite.client.callback.ClientThread;
@@ -60,9 +59,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 
 	private static final int VARP_SPEC_PERCENT = 300;
 	private static final int PENDING_SPEC_TIMEOUT_TICKS = 10;
-	private static final int UNARMED_KEY  = -1;
 	private static final int RECEIVED_KEY = -2;
-	private static final int THRALL_KEY   = -3;
 
 	@Inject private Client client;
 	@Inject private AudioPlayer audioPlayer;
@@ -77,31 +74,20 @@ public class CustomWeaponSfxPlugin extends Plugin
 	private NavigationButton navButton;
 
 	private final List<WeaponEntry> weaponEntries = new CopyOnWriteArrayList<>();
-	private final List<TriggerGroup> unarmedGroups  = new CopyOnWriteArrayList<>();
 	private final List<TriggerGroup> receivedGroups = new CopyOnWriteArrayList<>();
-	private final List<TriggerGroup> thrallGroups   = new CopyOnWriteArrayList<>();
 	private List<String> bundledSounds = new ArrayList<>();
 	private List<String> availableSounds = new ArrayList<>();
 
 	private int lastSpecPct = -1;
 	private int pendingSpecItemId = -1;
 	private int pendingSpecTick = -1;
-	private final Set<TriggerGroup> specGroupsFired = new HashSet<>();
 
 	// Hitsplats are batched per tick so multi-hit attacks are evaluated together.
 	private final Map<Integer, PendingAttack> pendingAttacks = new HashMap<>();
 	private int pendingAttackTick = -1;
 
-	// Thrall detection: collect all isMine NPC hitsplats per tick, then use XP to separate player from thrall.
-	// thrallCandidates[i] and deferredHits[i] always refer to the same hitsplat event.
-	private final List<ThrallCandidate> thrallCandidates = new ArrayList<>();
-	private final List<DeferredHit>     deferredHits     = new ArrayList<>();
-	private int oldMagicXP;
-	private int oldRangedXP;
-	private int oldAttackXP;
-	private int oldStrengthXP;
-	private int oldDefenceXP;
-	private int latestXPDiff;
+	private int lastXpDropTick = -1;
+	private final List<DeferredHit> deferredHits = new ArrayList<>();
 
 	@Override
 	protected void startUp()
@@ -110,16 +96,12 @@ public class CustomWeaponSfxPlugin extends Plugin
 		executor = Executors.newSingleThreadExecutor();
 
 		loadWeaponEntries();
-		loadDefaultGroups(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX);
-		seedFirstRunGroups(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
 		loadDefaultGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX);
 		seedFirstRunGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
-		loadDefaultGroups(thrallGroups, CustomWeaponSfxPanel.THRALL_GROUPS_PREFIX);
-		seedFirstRunGroups(thrallGroups, CustomWeaponSfxPanel.THRALL_GROUPS_PREFIX, EnumSet.of(Triggers.THRALL_HIT));
 		bundledSounds = scanBundledSounds();
 		availableSounds = scanSounds();
 
-		panel = new CustomWeaponSfxPanel(configManager, itemManager, this::openWeaponSearch, this::removeWeapon, this::refreshSounds, this::playSoundFile, this::resetAllData);
+		panel = new CustomWeaponSfxPanel(configManager, itemManager, this::openWeaponSearch, this::addEquippedWeapon, this::removeWeapon, this::refreshSounds, this::playSoundFile, this::resetAllData);
 
 		navButton = NavigationButton.builder()
 			.tooltip("Custom Weapon SFX")
@@ -129,17 +111,9 @@ public class CustomWeaponSfxPlugin extends Plugin
 			.build();
 		clientToolbar.addNavigation(navButton);
 
-		panel.rebuild(new ArrayList<>(weaponEntries), availableSounds, bundledSounds, unarmedGroups, receivedGroups, thrallGroups);
+		panel.rebuild(new ArrayList<>(weaponEntries), availableSounds, bundledSounds, receivedGroups);
 
-		clientThread.invoke(() ->
-		{
-			lastSpecPct  = client.getVarpValue(VARP_SPEC_PERCENT);
-			oldMagicXP    = client.getSkillExperience(Skill.MAGIC);
-			oldRangedXP   = client.getSkillExperience(Skill.RANGED);
-			oldAttackXP   = client.getSkillExperience(Skill.ATTACK);
-			oldStrengthXP = client.getSkillExperience(Skill.STRENGTH);
-			oldDefenceXP  = client.getSkillExperience(Skill.DEFENCE);
-		});
+		clientThread.invoke(() -> lastSpecPct = client.getVarpValue(VARP_SPEC_PERCENT));
 
 		log.debug("Custom Weapon SFX started!");
 	}
@@ -154,22 +128,18 @@ public class CustomWeaponSfxPlugin extends Plugin
 		navButton = null;
 		panel = null;
 
-		unarmedGroups.clear();
 		receivedGroups.clear();
-		thrallGroups.clear();
 		bundledSounds.clear();
 
 		lastSpecPct = -1;
 		pendingSpecItemId = -1;
 		pendingSpecTick = -1;
-		specGroupsFired.clear();
 
 		pendingAttacks.clear();
 		pendingAttackTick = -1;
 
-		thrallCandidates.clear();
+		lastXpDropTick = -1;
 		deferredHits.clear();
-		latestXPDiff = 0;
 
 		log.debug("Custom Weapon SFX stopped!");
 	}
@@ -192,62 +162,23 @@ public class CustomWeaponSfxPlugin extends Plugin
 			pendingSpecTick = -1;
 		}
 
-		// XP tracking for thrall detection
-		int magicXP    = client.getSkillExperience(Skill.MAGIC);
-		int rangedXP   = client.getSkillExperience(Skill.RANGED);
-		int attackXP   = client.getSkillExperience(Skill.ATTACK);
-		int strengthXP = client.getSkillExperience(Skill.STRENGTH);
-		int defenceXP  = client.getSkillExperience(Skill.DEFENCE);
-
-		int xpDiff = magicXP != oldMagicXP ? magicXP - oldMagicXP
-			: rangedXP != oldRangedXP ? rangedXP - oldRangedXP
-			: (attackXP - oldAttackXP) + (defenceXP - oldDefenceXP) + (strengthXP - oldStrengthXP);
-		if (xpDiff != 0) latestXPDiff = xpDiff;
-
-		oldMagicXP    = magicXP;
-		oldRangedXP   = rangedXP;
-		oldAttackXP   = attackXP;
-		oldStrengthXP = strengthXP;
-		oldDefenceXP  = defenceXP;
-
-		if (!thrallCandidates.isEmpty())
+		if (!deferredHits.isEmpty())
 		{
-			int tick = client.getTickCount();
-
-			// Identify which of the collected hitsplats are the thrall's.
-			Set<Integer> thrallIndices = identifyThrallIndices();
-
-			// Buffer thrall hits into pendingAttacks[THRALL_KEY] so they fire in the same
-			// loop as the player's hits — this ensures both sounds play on the same pass.
-			for (int idx : thrallIndices)
-			{
-				ThrallCandidate c = thrallCandidates.get(idx);
-				buffer(THRALL_KEY, thrallGroups, false, c.amount, c.isMax, tick);
-			}
-
-			// Buffer only the player's hits (non-thrall) for weapon/unarmed sounds.
-			for (int i = 0; i < deferredHits.size(); i++)
-			{
-				if (!thrallIndices.contains(i))
-				{
-					DeferredHit h = deferredHits.get(i);
-					buffer(h.key, h.groups, h.wasSpec, h.amount, h.isMax, h.tick);
-				}
-			}
-
-			thrallCandidates.clear();
+			for (DeferredHit h : deferredHits)
+				buffer(h.key, h.groups, h.wasSpec, h.amount, h.isMax, h.tick);
 			deferredHits.clear();
 		}
 
 		if (!pendingAttacks.isEmpty())
 		{
 			boolean specHitsplatSeen = false;
+			boolean xpDropOccurred = lastXpDropTick == pendingAttackTick;
 			for (PendingAttack attack : pendingAttacks.values())
 			{
 				boolean anyMax  = attack.isMaxList.contains(true);
 				boolean anyHit  = attack.amounts.stream().anyMatch(a -> a > 0);
 				boolean allZero = attack.amounts.stream().allMatch(a -> a == 0);
-				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, anyMax);
+				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, anyMax, xpDropOccurred);
 				if (attack.wasSpec) specHitsplatSeen = true;
 			}
 			pendingAttacks.clear();
@@ -259,6 +190,21 @@ public class CustomWeaponSfxPlugin extends Plugin
 				pendingSpecItemId = -1;
 				pendingSpecTick   = -1;
 			}
+		}
+	}
+
+	@Subscribe
+	public void onStatChanged(StatChanged event)
+	{
+		switch (event.getSkill())
+		{
+			case ATTACK:
+			case STRENGTH:
+			case DEFENCE:
+			case HITPOINTS:
+			case RANGED:
+			case MAGIC:
+				lastXpDropTick = client.getTickCount();
 		}
 	}
 
@@ -275,29 +221,17 @@ public class CustomWeaponSfxPlugin extends Plugin
 			return;
 		}
 
-		int hitsplatType = event.getHitsplat().getHitsplatType();
-
 		if (!event.getHitsplat().isMine()) return;
 
-		boolean isMax   = isMaxHit(hitsplatType);
+		boolean isMax   = isMaxHit(event.getHitsplat().getHitsplatType());
 		boolean wasSpec = pendingSpecItemId >= 0;
 
-		// Defer both thrall detection and weapon/unarmed routing to onGameTick,
-		// where XP can tell us which hitsplat is the player's vs the thrall's.
-		thrallCandidates.add(new ThrallCandidate(amount, isMax));
-
 		int weaponId = getEquippedWeaponId();
-		WeaponEntry entry = weaponId >= 0 ? getWeaponEntry(weaponId) : null;
+		if (weaponId < 0) return;
 
+		WeaponEntry entry = getWeaponEntry(weaponId);
 		if (entry != null)
-		{
 			deferredHits.add(new DeferredHit(weaponId, entry.getGroups(), wasSpec, amount, isMax, tick));
-			return;
-		}
-
-		if (weaponId >= 0) return;
-
-		deferredHits.add(new DeferredHit(UNARMED_KEY, unarmedGroups, false, amount, isMax, tick));
 	}
 
 	private void resetAllData()
@@ -317,16 +251,10 @@ public class CustomWeaponSfxPlugin extends Plugin
 		configManager.unsetConfiguration(CONFIG_GROUP, "specWeaponIds");
 		weaponEntries.clear();
 
-		clearDefaultGroupConfig(CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX, unarmedGroups.size());
-		unarmedGroups.clear();
 		clearDefaultGroupConfig(CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, receivedGroups.size());
 		receivedGroups.clear();
-		clearDefaultGroupConfig(CustomWeaponSfxPanel.THRALL_GROUPS_PREFIX, thrallGroups.size());
-		thrallGroups.clear();
 
-		addDefaultGroup(unarmedGroups, CustomWeaponSfxPanel.UNARMED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
 		addDefaultGroup(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
-		addDefaultGroup(thrallGroups, CustomWeaponSfxPanel.THRALL_GROUPS_PREFIX, EnumSet.of(Triggers.THRALL_HIT));
 
 		rebuildPanel();
 	}
@@ -372,7 +300,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 
 		pendingSpecItemId = weaponId;
 		pendingSpecTick = client.getTickCount();
-		specGroupsFired.clear();
 	}
 
 	private int getEquippedWeaponId()
@@ -408,6 +335,17 @@ public class CustomWeaponSfxPlugin extends Plugin
 				.build();
 		});
 		client.getCanvas().requestFocusInWindow();
+	}
+
+	private void addEquippedWeapon()
+	{
+		clientThread.invoke(() ->
+		{
+			int weaponId = getEquippedWeaponId();
+			if (weaponId < 0) return;
+			String name = client.getItemDefinition(weaponId).getName();
+			addWeapon(weaponId, name);
+		});
 	}
 
 	private void addWeapon(int itemId, String name)
@@ -458,7 +396,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 		List<WeaponEntry> snapshot = new ArrayList<>(weaponEntries);
 		List<String> sounds = availableSounds;
 		List<String> bundled = bundledSounds;
-		SwingUtilities.invokeLater(() -> p.rebuild(snapshot, sounds, bundled, unarmedGroups, receivedGroups, thrallGroups));
+		SwingUtilities.invokeLater(() -> p.rebuild(snapshot, sounds, bundled, receivedGroups));
 	}
 
 	private WeaponEntry getWeaponEntry(int itemId)
@@ -594,7 +532,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 	}
 
 	private void fireMatchingGroups(List<TriggerGroup> groups, boolean wasSpec,
-									boolean anyHit, boolean allZero, boolean anyMax)
+									boolean anyHit, boolean allZero, boolean anyMax, boolean xpDropOccurred)
 	{
 		for (TriggerGroup group : groups)
 		{
@@ -604,20 +542,19 @@ public class CustomWeaponSfxPlugin extends Plugin
 			boolean matches = false;
 			for (Triggers trigger : triggers)
 			{
-				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, anyMax))
+				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, anyMax, xpDropOccurred))
 				{
 					matches = true;
 					break;
 				}
 			}
 			if (!matches) continue;
-			if (wasSpec && !specGroupsFired.add(group)) continue;
-			playGroupSound(group);
+			playSoundFile(group.getSoundFile(), group.getVolume());
 		}
 	}
 
 	private static boolean matchesTrigger(Triggers trigger, boolean wasSpec,
-										   boolean anyHit, boolean allZero, boolean anyMax)
+										   boolean anyHit, boolean allZero, boolean anyMax, boolean xpDropOccurred)
 	{
 		switch (trigger)
 		{
@@ -627,8 +564,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 			case SPECIAL_ZERO: return wasSpec && allZero && !anyMax;
 			case SPECIAL_HIT:  return wasSpec && anyHit && !anyMax;
 			case SPECIAL_MAX:  return wasSpec && anyMax;
-			case THRALL_HIT:   return anyHit;
-			case ALL:          return true;
+			case ALL:          return xpDropOccurred;
 			default:           return false;
 		}
 	}
@@ -641,11 +577,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 			|| hitsplatType == HitsplatID.DAMAGE_MAX_ME_YELLOW
 			|| hitsplatType == HitsplatID.DAMAGE_MAX_ME_WHITE
 			|| hitsplatType == HitsplatID.DAMAGE_MAX_ME_POISE;
-	}
-
-	private void playGroupSound(TriggerGroup group)
-	{
-		playSoundFile(group.getSoundFile(), group.getVolume());
 	}
 
 	private void saveWeaponGroups(int itemId, List<TriggerGroup> groups)
@@ -746,64 +677,6 @@ public class CustomWeaponSfxPlugin extends Plugin
 		return 20.0f * (float) Math.log10(volume / 100.0f);
 	}
 
-	// Player attack generates XP; thrall attack does not. Returns the indices (into thrallCandidates)
-	// of hitsplats attributed to the thrall. The hitsplat closest to xpDiff/4 is the player's.
-	// Limitation: multi-hit/multi-target weapons (e.g. scythe on 3 targets) confuse the XP
-	// matching because total XP covers all targets but we see individual hitsplats.
-	private Set<Integer> identifyThrallIndices()
-	{
-		if (thrallCandidates.isEmpty()) return new HashSet<>();
-
-		if (latestXPDiff > 0)
-		{
-			int playerDmg = latestXPDiff / 4;
-			latestXPDiff = 0;
-
-			// playerDmg = total damage dealt by the player across ALL hits this tick.
-			// Anything above that total belongs to the thrall.
-			int totalCandidateDmg = 0;
-			for (ThrallCandidate c : thrallCandidates) totalCandidateDmg += c.amount;
-			int thrallDmg = totalCandidateDmg - playerDmg;
-
-			if (thrallDmg <= 0)
-			{
-				// XP accounts for every candidate hit — no thrall this tick.
-				return new HashSet<>();
-			}
-
-			// Find the single candidate whose amount is closest to the thrall's share.
-			int thrallIdx = 0;
-			int minDist   = Integer.MAX_VALUE;
-			for (int i = 0; i < thrallCandidates.size(); i++)
-			{
-				int dist = Math.abs(thrallCandidates.get(i).amount - thrallDmg);
-				if (dist < minDist) { minDist = dist; thrallIdx = i; }
-			}
-
-			Set<Integer> result = new HashSet<>();
-			result.add(thrallIdx);
-			return result;
-		}
-		else
-		{
-			// No XP this tick; positive-damage hitsplats are the thrall's.
-			// All-zero case is ambiguous (could be player 0-hit) so we skip it.
-			Set<Integer> thrallIdx = new HashSet<>();
-			for (int i = 0; i < thrallCandidates.size(); i++)
-			{
-				if (thrallCandidates.get(i).amount > 0) thrallIdx.add(i);
-			}
-			return thrallIdx;
-		}
-	}
-
-	private static class ThrallCandidate
-	{
-		final int     amount;
-		final boolean isMax;
-
-		ThrallCandidate(int amount, boolean isMax) { this.amount = amount; this.isMax = isMax; }
-	}
 
 	private static class DeferredHit
 	{

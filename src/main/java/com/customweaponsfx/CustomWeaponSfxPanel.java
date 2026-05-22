@@ -35,9 +35,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	static final String BUNDLED_PREFIX = "bundled:";
 	private static final String BUILTIN_SUFFIX = " (built-in)";
 
-	static final String UNARMED_GROUPS_PREFIX  = "defaultAttack";
 	static final String RECEIVED_GROUPS_PREFIX = "defaultReceived";
-	static final String THRALL_GROUPS_PREFIX   = "defaultThrall";
 
 
 	private List<String> bundledSounds = new ArrayList<>();
@@ -47,6 +45,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	private final ConfigManager configManager;
 	private final ItemManager itemManager;
 	private final Runnable onOpenSearch;
+	private final Runnable onAddEquipped;
 	private final Consumer<Integer> onRemoveWeapon;
 	private final Runnable onRefreshSounds;
 	private final BiConsumer<String, Integer> onTestSound;
@@ -57,6 +56,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	public CustomWeaponSfxPanel(ConfigManager configManager,
 		ItemManager itemManager,
 		Runnable onOpenSearch,
+		Runnable onAddEquipped,
 		Consumer<Integer> onRemoveWeapon,
 		Runnable onRefreshSounds,
 		BiConsumer<String, Integer> onTestSound,
@@ -65,6 +65,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		this.configManager = configManager;
 		this.itemManager = itemManager;
 		this.onOpenSearch = onOpenSearch;
+		this.onAddEquipped = onAddEquipped;
 		this.onRemoveWeapon = onRemoveWeapon;
 		this.onRefreshSounds = onRefreshSounds;
 		this.onTestSound = onTestSound;
@@ -98,8 +99,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 
 		JLabel customSoundDirections = new JLabel("<html>Want a custom sfx?<br>" +
 				"1. Place <b>.wav</b> files in <b>.runelite/customweaponsfx/</b><br>" +
-				"2. Click Refesh Sounds<br>" +
-				"3. Click Add Weapon and configure it</html>");
+				"2. Click Refresh Sounds<br>" +
+				"3. Click Add (Search) and configure it</html>");
 		customSoundDirections.setFont(customSoundDirections.getFont().deriveFont(14f));
 		customSoundDirections.setAlignmentX(Component.LEFT_ALIGNMENT);
 		top.add(customSoundDirections);
@@ -109,16 +110,17 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		btnRow.setLayout(new javax.swing.BoxLayout(btnRow, javax.swing.BoxLayout.X_AXIS));
 		btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-		JButton addWeaponBtn = new JButton("Add Weapon");
-		addWeaponBtn.setToolTipText("Search for a weapon to configure");
-		addWeaponBtn.addActionListener(e -> onOpenSearch.run());
-		btnRow.add(addWeaponBtn);
+		JButton addSearchBtn = new JButton("Add (Search)");
+		addSearchBtn.setToolTipText("Search for a weapon to configure");
+		addSearchBtn.addActionListener(e -> onOpenSearch.run());
+		btnRow.add(addSearchBtn);
 
 		btnRow.add(Box.createHorizontalStrut(4));
 
-		JButton refreshBtn = new JButton("Refresh Sounds");
-		refreshBtn.addActionListener(e -> onRefreshSounds.run());
-		btnRow.add(refreshBtn);
+		JButton addEquippedBtn = new JButton("Add (Equipped)");
+		addEquippedBtn.setToolTipText("Add your currently equipped weapon");
+		addEquippedBtn.addActionListener(e -> onAddEquipped.run());
+		btnRow.add(addEquippedBtn);
 
 		top.add(btnRow);
 		top.add(Box.createVerticalStrut(4));
@@ -143,6 +145,12 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		});
 		resetRow.add(resetBtn);
 
+		resetRow.add(Box.createHorizontalStrut(4));
+
+		JButton refreshBtn = new JButton("Refresh Sounds");
+		refreshBtn.addActionListener(e -> onRefreshSounds.run());
+		resetRow.add(refreshBtn);
+
 		top.add(resetRow);
 		top.add(Box.createVerticalStrut(10));
 
@@ -150,8 +158,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	}
 
 	public void rebuild(List<WeaponEntry> weapons, List<String> availableSounds,
-		List<String> bundledSounds, List<TriggerGroup> unarmedGroups,
-		List<TriggerGroup> receivedGroups, List<TriggerGroup> thrallGroups)
+		List<String> bundledSounds, List<TriggerGroup> receivedGroups)
 	{
 		this.bundledSounds = bundledSounds;
 		SwingUtilities.invokeLater(() ->
@@ -159,19 +166,10 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			weaponListPanel.removeAll();
 
 			weaponListPanel.add(buildDefaultRowGroups(
-				"Player Attacks (Unarmed)", UNARMED_GROUPS_PREFIX, unarmedGroups, availableSounds,
-				EnumSet.of(Triggers.REGULAR_ZERO, Triggers.REGULAR_HIT, Triggers.REGULAR_MAX, Triggers.ALL)));
-			weaponListPanel.add(Box.createVerticalStrut(4));
-
-			weaponListPanel.add(buildDefaultRowGroups(
 				"Received Attacks", RECEIVED_GROUPS_PREFIX, receivedGroups, availableSounds,
 				EnumSet.of(Triggers.REGULAR_ZERO, Triggers.REGULAR_HIT, Triggers.ALL)));
 			weaponListPanel.add(Box.createVerticalStrut(4));
 
-			weaponListPanel.add(buildDefaultRowGroups(
-				"Thrall Attacks", THRALL_GROUPS_PREFIX, thrallGroups, availableSounds,
-				EnumSet.of(Triggers.THRALL_HIT)));
-			weaponListPanel.add(Box.createVerticalStrut(8));
 
 			for (int i = 0; i < weapons.size(); i++)
 			{
@@ -324,7 +322,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		groupsHolder.setVisible(!collapsed);
 		rebuildGroupsSection(groupsHolder, entry.getGroups(), availableSounds,
 			() -> saveWeaponGroupsFromPanel(entry),
-			EnumSet.complementOf(EnumSet.of(Triggers.THRALL_HIT)));
+			EnumSet.complementOf(EnumSet.of(Triggers.REGULAR_HIT)));
 		panel.add(groupsHolder);
 
 		collapseBtn.addActionListener(e ->

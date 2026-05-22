@@ -1,54 +1,36 @@
 # Custom Weapon SFX
 
-A RuneLite plugin that plays configurable sound effects on player actions, with per-weapon and per-trigger control.
+Play custom sound effects when you attack or get hit in Old School RuneScape.
 
 ## Features
 
-- **Per-weapon sounds** — assign custom sounds to specific weapons via an in-game item search
-- **Unarmed attacks** — configure sounds for hits dealt while unarmed
-- **Received attacks** — configure sounds for incoming hits on your player
-- **Thrall attacks** — configure sounds for hits dealt by your thrall
-- **Granular triggers** — each sound group fires independently based on the hit outcome:
-  - **Regular attack zero** — all hitsplats are zero damage
-  - **Regular attack hit** — at least one hitsplat deals damage, none are max hits
-  - **Regular attack max** — at least one hitsplat is a max hit
-  - **Special attack zero / hit / max** — same as above but for special attacks
-  - **Thrall attack hit** — thrall deals any damage
-  - **All attacks** — fires on every attack regardless of outcome
-- **Multi-hit weapon support** — for weapons with multiple hitsplats (Dragon Claws, Scythe of Vitur, Dragon Dagger spec, etc.), all splats are evaluated together as a single attack
-- **Multiple sound groups per entry** — stack several sounds on different triggers for one weapon
-- **Custom sound files** — drop `.wav` files into `.runelite/customweaponsfx/` and use them in-game
-- **Built-in sounds** — bundled sounds (including `squeak`) available out of the box
-- **Per-group volume** — independent volume slider (0–100) for each sound group
-- **Sound preview** — test any sound directly from the panel before using it in-game
-
-## Trigger logic
-
-For any attack (including multi-hitsplat weapons), exactly one trigger fires per attack:
-
-| Condition | Trigger |
-|---|---|
-| Any hitsplat is a max hit | max |
-| All hitsplats are zero | zero |
-| Otherwise | hit |
+- Assign sounds to specific weapons
+- Play different sounds for misses and max hits — on both regular and special attacks
+- Separate sounds for when *you* take damage
+- Use built-in sounds or drop in your own `.wav` files
+- Per-sound volume control and in-panel preview
 
 ## Setup
 
-1. Open the plugin panel via the sidebar icon.
-2. Click **Add Weapon** and search for a weapon while logged in.
-3. Expand the weapon row, pick a sound from the dropdown, and check the triggers you want.
-4. For unarmed, received, or thrall sounds, expand those sections at the top of the panel.
+1. Open the **Custom Weapon SFX** panel from the sidebar.
+2. Add a weapon — either click **Add (Equipped)** while holding a weapon, or click **Add (Search)** to find one by name (requires being logged in).
+3. Expand the weapon, pick a sound, and check the triggers you want it to play on.
+4. To play a sound when you take damage, expand the **Received Attacks** section at the top.
 
-### Custom sounds
+### Using your own sounds
 
 1. Place `.wav` files in `.runelite/customweaponsfx/`.
 2. Click **Refresh Sounds** in the panel.
-3. The files will appear in the sound dropdowns alongside the built-in options.
+3. Your files will appear in the sound dropdowns.
 
-### Adding multiple sounds to one weapon
+### Multiple sounds per weapon
 
-Each weapon (or the unarmed/received/thrall sections) supports multiple sound groups. Click **+ Add Sound Group** inside an expanded entry to add another group with its own sound, volume, and trigger set.
+Click **+ Add Sound Group** inside an expanded weapon (or the Received Attacks section) to add another sound with its own trigger and volume settings.
 
-### Resetting all data
+### Resetting
 
-Click **Reset All Data** in the panel to wipe all saved weapon entries and sound groups and restore all sections to their defaults. A confirmation dialog will appear before anything is deleted.
+Click **Reset All Data** to clear all weapons and sound groups. A confirmation dialog will appear first.
+
+### Known "Issues"
+
+If you have a thrall out, and you have a "Regular attack zero" trigger set, thrall zeros will cause this sfx to play. Sorry, this isn't worth trying to figure out, due to lack of data that is provided, thrall hits are basically indistinguishable from player hits when it comes to hitting zeros. If Jagex ever provides more data alongside thrall hits, i'd love to fix this.
