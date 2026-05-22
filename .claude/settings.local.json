@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-Command *)",
+      "PowerShell(New-Item *)",
+      "PowerShell(Get-ChildItem *)",
+      "WebFetch(domain:static.runelite.net)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(jar tf *)",
+      "PowerShell($jar = \"C:\\\\Users\\\\hunte\\\\.gradle\\\\caches\\\\modules-2\\\\files-2.1\\\\net.runelite\\\\client\\\\1.12.26.3\\\\df16e6d8230a49f4ce99caeaeb7c3d8874f72ac2\\\\client-1.12.26.3-sources.jar\"; Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar\\); $entry = $zip.Entries | Where-Object { $_.FullName -eq \"net/runelite/client/game/chatbox/ChatboxItemSearch.java\" }; $stream = $entry.Open\\(\\); $reader = New-Object System.IO.StreamReader\\($stream\\); $content = $reader.ReadToEnd\\(\\); $reader.Dispose\\(\\); $stream.Dispose\\(\\); $zip.Dispose\\(\\); $content)",
+      "PowerShell($jar = \"C:\\\\Users\\\\hunte\\\\.gradle\\\\caches\\\\modules-2\\\\files-2.1\\\\net.runelite\\\\client\\\\1.12.26.3\\\\df16e6d8230a49f4ce99caeaeb7c3d8874f72ac2\\\\client-1.12.26.3-sources.jar\"; Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar\\); $entry = $zip.Entries | Where-Object { $_.FullName -eq \"net/runelite/client/game/chatbox/ChatboxTextInput.java\" }; $stream = $entry.Open\\(\\); $reader = New-Object System.IO.StreamReader\\($stream\\); $content = $reader.ReadToEnd\\(\\); $reader.Dispose\\(\\); $stream.Dispose\\(\\); $zip.Dispose\\(\\); $content)",
+      "PowerShell($jar = \"C:\\\\Users\\\\hunte\\\\.gradle\\\\caches\\\\modules-2\\\\files-2.1\\\\net.runelite\\\\client\\\\1.12.26.3\\\\df16e6d8230a49f4ce99caeaeb7c3d8874f72ac2\\\\client-1.12.26.3-sources.jar\"; Add-Type -AssemblyName System.IO.Compression.FileSystem; $zip = [System.IO.Compression.ZipFile]::OpenRead\\($jar\\); $entry = $zip.Entries | Where-Object { $_.FullName -eq \"net/runelite/client/game/chatbox/ChatboxPanelManager.java\" }; $stream = $entry.Open\\(\\); $reader = New-Object System.IO.StreamReader\\($stream\\); $content = $reader.ReadToEnd\\(\\); $reader.Dispose\\(\\); $stream.Dispose\\(\\); $zip.Dispose\\(\\); $content)",
+      "Bash(xargs grep -l \"HitsplatApplied\")"
+    ]
+  }
+}
