@@ -29,6 +29,28 @@ dependencies {
 
 group = 'com.customweaponsfx'
 
+def pluginProps = new Properties()
+file('runelite-plugin.properties').withInputStream { pluginProps.load(it) }
+version = pluginProps.getProperty('version')
+
+task validatePatchNotes {
+	doLast {
+		def ver = pluginProps.getProperty('version')
+		def notes = new groovy.json.JsonSlurper().parse(file('src/main/resources/com/customweaponsfx/patch_notes.json'))
+		if (!notes.containsKey(ver)) {
+			throw new GradleException("patch_notes.json has no entry for version '${ver}'. Add one before building.")
+		}
+	}
+}
+
+task createProperties(dependsOn: [processResources, validatePatchNotes]) {
+	doLast {
+		new File("$buildDir/resources/main/customweaponsfx_version.txt").text = "version=$project.version"
+	}
+}
+
+classes.dependsOn createProperties
+
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
 	options.release.set(11)

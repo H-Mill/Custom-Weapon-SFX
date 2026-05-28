@@ -1,9 +1,12 @@
 package com.customweaponsfx;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.InputStream;
 import java.net.JarURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -12,6 +15,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.jar.JarEntry;
@@ -49,14 +53,17 @@ import net.runelite.client.util.ImageUtil;
 @Slf4j
 @PluginDescriptor(
 		name = "Custom Weapon SFX",
-		description = "Plays a custom sound effect on configurable player actions",
-		tags = {"custom", "weapon", "sound", "sfx"},
+		description = "Plays custom sound effects on weapon hits, misses, and max hits — configurable per weapon with triggers, volume, and chance",
+		tags = {"custom", "weapon", "sound", "sfx", "squeaky", "toy", "max hit", "on hit", "damage", "miss", "zero"},
 		configName = "SqueakyToyPlugin"
 )
 public class CustomWeaponSfxPlugin extends Plugin
 {
 	static final String CONFIG_GROUP = "customweaponsfx";
+	static final String CONFIG_KEY_VERSION = "version";
 	static final File SOUNDS_DIR = new File(RuneLite.RUNELITE_DIR, "customweaponsfx");
+
+	private String currentVersion = "";
 
 	private static final int VARP_SPEC_PERCENT = 300;
 	private static final int PENDING_SPEC_TIMEOUT_TICKS = 10;
@@ -67,6 +74,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 	@Inject private ClientToolbar clientToolbar;
 	@Inject private ClientThread clientThread;
 	@Inject private ConfigManager configManager;
+	@Inject private Gson gson;
 	@Inject private ItemManager itemManager;
 	@Inject private WeaponChatboxSearch weaponSearch;
 
@@ -95,6 +103,20 @@ public class CustomWeaponSfxPlugin extends Plugin
 		SOUNDS_DIR.mkdirs();
 		executor = Executors.newSingleThreadExecutor();
 
+		try
+		{
+			Properties props = new Properties();
+			try (InputStream is = CustomWeaponSfxPlugin.class.getResourceAsStream("/customweaponsfx_version.txt"))
+			{
+				if (is != null) props.load(is);
+			}
+			currentVersion = props.getProperty("version", "");
+		}
+		catch (Exception e)
+		{
+			log.debug("Could not load plugin version", e);
+		}
+
 		loadWeaponEntries();
 		loadDefaultGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX);
 		seedFirstRunGroups(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
@@ -113,9 +135,44 @@ public class CustomWeaponSfxPlugin extends Plugin
 
 		panel.rebuild(new ArrayList<>(weaponEntries), availableSounds, bundledSounds, receivedGroups);
 
+		String savedVersion = getSavedVersionString();
+		String currentVer = currentVersion;
+		String notes = loadPatchNotes(currentVer);
+		SwingUtilities.invokeLater(() ->
+			panel.showCorrectPanel(savedVersion, currentVer, notes, () -> setSavedVersionString(currentVer)));
+
 		clientThread.invoke(() -> lastSpecPct = client.getVarpValue(VARP_SPEC_PERCENT));
 
 		log.debug("Custom Weapon SFX started!");
+	}
+
+	public String getCurrentVersionString() { return currentVersion; }
+
+	public String getSavedVersionString()
+	{
+		String v = configManager.getConfiguration(CONFIG_GROUP, CONFIG_KEY_VERSION);
+		return v == null ? "" : v;
+	}
+
+	public void setSavedVersionString(String version)
+	{
+		configManager.setConfiguration(CONFIG_GROUP, CONFIG_KEY_VERSION, version);
+	}
+
+	private String loadPatchNotes(String version)
+	{
+		try (InputStream is = CustomWeaponSfxPlugin.class.getResourceAsStream("patch_notes.json"))
+		{
+			if (is == null) return "";
+			String json = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+			JsonObject obj = gson.fromJson(json, JsonObject.class);
+			if (obj.has(version)) return obj.get(version).getAsString();
+		}
+		catch (Exception e)
+		{
+			log.debug("Could not load patch notes", e);
+		}
+		return "";
 	}
 
 	@Override

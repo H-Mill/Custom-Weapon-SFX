@@ -52,6 +52,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 	private final Runnable onReset;
 
 	private final JPanel weaponListPanel;
+	private final JPanel mainContent;
+	private final JPanel updatePanelWrapper;
 
 	public CustomWeaponSfxPanel(ConfigManager configManager,
 		ItemManager itemManager,
@@ -77,12 +79,20 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		weaponListPanel = new JPanel();
 		weaponListPanel.setLayout(new javax.swing.BoxLayout(weaponListPanel, javax.swing.BoxLayout.Y_AXIS));
 
-		JPanel content = new JPanel();
-		content.setLayout(new javax.swing.BoxLayout(content, javax.swing.BoxLayout.Y_AXIS));
-		content.add(buildTopPanel());
-		content.add(weaponListPanel);
+		mainContent = new JPanel();
+		mainContent.setLayout(new javax.swing.BoxLayout(mainContent, javax.swing.BoxLayout.Y_AXIS));
+		mainContent.add(buildTopPanel());
+		mainContent.add(weaponListPanel);
 
-		add(content, BorderLayout.NORTH);
+		updatePanelWrapper = new JPanel(new BorderLayout());
+		updatePanelWrapper.setVisible(false);
+
+		JPanel root = new JPanel();
+		root.setLayout(new javax.swing.BoxLayout(root, javax.swing.BoxLayout.Y_AXIS));
+		root.add(updatePanelWrapper);
+		root.add(mainContent);
+
+		add(root, BorderLayout.NORTH);
 	}
 
 	private JPanel buildTopPanel()
@@ -180,6 +190,31 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			weaponListPanel.revalidate();
 			weaponListPanel.repaint();
 		});
+	}
+
+	public void showCorrectPanel(String savedVersion, String currentVersion, String patchNotes, Runnable onDismiss)
+	{
+		if (!currentVersion.isEmpty() && !currentVersion.equals(savedVersion))
+		{
+			updatePanelWrapper.removeAll();
+			updatePanelWrapper.add(new CustomWeaponSfxUpdatePanel(currentVersion, patchNotes, () ->
+			{
+				onDismiss.run();
+				updatePanelWrapper.setVisible(false);
+				mainContent.setVisible(true);
+				revalidate();
+				repaint();
+			}), BorderLayout.CENTER);
+			updatePanelWrapper.setVisible(true);
+			mainContent.setVisible(false);
+		}
+		else
+		{
+			updatePanelWrapper.setVisible(false);
+			mainContent.setVisible(true);
+		}
+		revalidate();
+		repaint();
 	}
 
 	private JPanel buildDefaultRowGroups(String label, String prefix,
