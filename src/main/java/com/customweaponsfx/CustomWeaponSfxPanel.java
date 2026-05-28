@@ -399,6 +399,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			groupPanel.add(Box.createVerticalStrut(4));
 			groupPanel.add(buildVolumeRowGroup(group, onSave));
 			groupPanel.add(Box.createVerticalStrut(4));
+			groupPanel.add(buildChanceRowGroup(group, onSave));
+			groupPanel.add(Box.createVerticalStrut(4));
 			groupPanel.add(buildTriggersPanel(group.getTriggers(), onSave, visibleTriggers));
 
 			holder.add(groupPanel);
@@ -411,7 +413,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		addGroupBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
 		addGroupBtn.addActionListener(e ->
 		{
-			groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), "", 75));
+			groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), "", 75, 100));
 			onSave.run();
 			rebuildGroupsSection(holder, groups, availableSounds, onSave, visibleTriggers);
 		});
@@ -511,6 +513,33 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		return row;
 	}
 
+	private JPanel buildChanceRowGroup(TriggerGroup group, Runnable onSave)
+	{
+		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		row.setBackground(ColorScheme.DARK_GRAY_COLOR);
+		row.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JLabel lbl = new JLabel("Chance:");
+		lbl.setForeground(Color.WHITE);
+		row.add(lbl);
+		JSlider slider = new JSlider(0, 100, group.getChance());
+		slider.setPreferredSize(new Dimension(100, 20));
+		JLabel val = new JLabel(group.getChance() + "%");
+		val.setForeground(Color.LIGHT_GRAY);
+		slider.addChangeListener(e ->
+		{
+			int v = slider.getValue();
+			val.setText(v + "%");
+			if (!slider.getValueIsAdjusting())
+			{
+				group.setChance(v);
+				onSave.run();
+			}
+		});
+		row.add(slider);
+		row.add(val);
+		return row;
+	}
+
 	private void saveWeaponGroupsFromPanel(WeaponEntry entry)
 	{
 		int itemId = entry.getItemId();
@@ -527,6 +556,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 				"specWeapon_" + itemId + "_group_" + i + "_sound", g.getSoundFile());
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
 				"specWeapon_" + itemId + "_group_" + i + "_volume", g.getVolume());
+			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+				"specWeapon_" + itemId + "_group_" + i + "_chance", g.getChance());
 		}
 	}
 
@@ -544,6 +575,8 @@ public class CustomWeaponSfxPanel extends PluginPanel
 				prefix + "_group_" + i + "_sound", g.getSoundFile());
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
 				prefix + "_group_" + i + "_volume", g.getVolume());
+			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+				prefix + "_group_" + i + "_chance", g.getChance());
 		}
 	}
 

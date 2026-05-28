@@ -11,12 +11,14 @@ public class TriggerGroup
 	private final Set<Triggers> triggers;
 	@Setter private String soundFile;
 	@Setter private int volume;
+	@Setter private int chance;
 
-	public TriggerGroup(Set<Triggers> triggers, String soundFile, int volume)
+	public TriggerGroup(Set<Triggers> triggers, String soundFile, int volume, int chance)
 	{
 		this.triggers = triggers != null ? triggers : EnumSet.noneOf(Triggers.class);
 		this.soundFile = soundFile;
 		this.volume = volume;
+		this.chance = chance;
 	}
 
 	public static String serializeTriggers(Set<Triggers> triggers)
