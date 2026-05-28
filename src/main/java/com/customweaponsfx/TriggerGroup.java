@@ -1,6 +1,8 @@
 package com.customweaponsfx;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
@@ -9,15 +11,13 @@ import lombok.Setter;
 public class TriggerGroup
 {
 	private final Set<Triggers> triggers;
-	@Setter private String soundFile;
-	@Setter private int volume;
+	private final List<SoundEntry> sounds;
 	@Setter private int chance;
 
-	public TriggerGroup(Set<Triggers> triggers, String soundFile, int volume, int chance)
+	public TriggerGroup(Set<Triggers> triggers, List<SoundEntry> sounds, int chance)
 	{
 		this.triggers = triggers != null ? triggers : EnumSet.noneOf(Triggers.class);
-		this.soundFile = soundFile;
-		this.volume = volume;
+		this.sounds = sounds != null ? sounds : new ArrayList<>();
 		this.chance = chance;
 	}
 

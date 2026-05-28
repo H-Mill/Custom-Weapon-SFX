@@ -213,7 +213,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 		if (weaponId < 0) return;
 
 		WeaponEntry entry = getWeaponEntry(weaponId);
-		if (entry != null)
+		if (entry != null && entry.isEnabled())
 			deferredHits.add(new DeferredHit(weaponId, entry.getGroups(), wasSpec, amount, isMax, tick));
 	}
 
@@ -222,20 +222,28 @@ public class CustomWeaponSfxPlugin extends Plugin
 		for (WeaponEntry entry : weaponEntries)
 		{
 			int itemId = entry.getItemId();
-			for (int i = 0; i < entry.getGroups().size(); i++)
+			List<TriggerGroup> entryGroups = entry.getGroups();
+			for (int i = 0; i < entryGroups.size(); i++)
 			{
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_triggers");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_sound");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_volume");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_chance");
+				String gk = "specWeapon_" + itemId + "_group_" + i;
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_triggers");
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_chance");
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_soundCount");
+				List<SoundEntry> se = entryGroups.get(i).getSounds();
+				for (int j = 0; j < se.size(); j++)
+				{
+					configManager.unsetConfiguration(CONFIG_GROUP, gk + "_sound_" + j);
+					configManager.unsetConfiguration(CONFIG_GROUP, gk + "_volume_" + j);
+				}
 			}
 			configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_name");
+			configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_enabled");
 			configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_groupCount");
 		}
 		configManager.unsetConfiguration(CONFIG_GROUP, "specWeaponIds");
 		weaponEntries.clear();
 
-		clearDefaultGroupConfig(CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, receivedGroups.size());
+		clearDefaultGroupConfig(CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, receivedGroups);
 		receivedGroups.clear();
 
 		addDefaultGroup(receivedGroups, CustomWeaponSfxPanel.RECEIVED_GROUPS_PREFIX, EnumSet.of(Triggers.REGULAR_ZERO));
@@ -243,15 +251,21 @@ public class CustomWeaponSfxPlugin extends Plugin
 		rebuildPanel();
 	}
 
-	private void clearDefaultGroupConfig(String prefix, int count)
+	private void clearDefaultGroupConfig(String prefix, List<TriggerGroup> groups)
 	{
 		configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_groupCount");
-		for (int i = 0; i < count; i++)
+		for (int i = 0; i < groups.size(); i++)
 		{
-			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_triggers");
-			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_sound");
-			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_volume");
-			configManager.unsetConfiguration(CONFIG_GROUP, prefix + "_group_" + i + "_chance");
+			String gk = prefix + "_group_" + i;
+			configManager.unsetConfiguration(CONFIG_GROUP, gk + "_triggers");
+			configManager.unsetConfiguration(CONFIG_GROUP, gk + "_chance");
+			configManager.unsetConfiguration(CONFIG_GROUP, gk + "_soundCount");
+			List<SoundEntry> se = groups.get(i).getSounds();
+			for (int j = 0; j < se.size(); j++)
+			{
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_sound_" + j);
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_volume_" + j);
+			}
 		}
 	}
 
@@ -303,7 +317,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 			{
 				SwingUtilities.invokeLater(() ->
 					JOptionPane.showMessageDialog(
-						null,
+						SwingUtilities.getWindowAncestor(client.getCanvas()),
 						"You must be logged in to search for weapons.",
 						"Not Logged In",
 						JOptionPane.WARNING_MESSAGE
@@ -326,6 +340,18 @@ public class CustomWeaponSfxPlugin extends Plugin
 	{
 		clientThread.invoke(() ->
 		{
+			if (client.getGameState() != GameState.LOGGED_IN)
+			{
+				SwingUtilities.invokeLater(() ->
+					JOptionPane.showMessageDialog(
+						SwingUtilities.getWindowAncestor(client.getCanvas()),
+						"You must be logged in to add an equipped weapon.",
+						"Not Logged In",
+						JOptionPane.WARNING_MESSAGE
+					)
+				);
+				return;
+			}
 			int weaponId = getEquippedWeaponId();
 			if (weaponId < 0) return;
 			String name = client.getItemDefinition(weaponId).getName();
@@ -337,11 +363,14 @@ public class CustomWeaponSfxPlugin extends Plugin
 	{
 		if (getWeaponEntry(itemId) != null) return;
 
+		List<SoundEntry> defaultSounds = new ArrayList<>();
+		defaultSounds.add(new SoundEntry("", 75));
 		List<TriggerGroup> groups = new ArrayList<>();
-		groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), "", 75, 100));
+		groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), defaultSounds, 100));
 		weaponEntries.add(new WeaponEntry(itemId, name, groups));
 
 		configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_name", name);
+		configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_enabled", true);
 		saveWeaponGroups(itemId, groups);
 		saveWeaponIds();
 
@@ -353,16 +382,24 @@ public class CustomWeaponSfxPlugin extends Plugin
 		WeaponEntry entry = getWeaponEntry(itemId);
 		if (entry != null)
 		{
-			for (int i = 0; i < entry.getGroups().size(); i++)
+			List<TriggerGroup> entryGroups = entry.getGroups();
+			for (int i = 0; i < entryGroups.size(); i++)
 			{
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_triggers");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_sound");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_volume");
-				configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_chance");
+				String gk = "specWeapon_" + itemId + "_group_" + i;
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_triggers");
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_chance");
+				configManager.unsetConfiguration(CONFIG_GROUP, gk + "_soundCount");
+				List<SoundEntry> se = entryGroups.get(i).getSounds();
+				for (int j = 0; j < se.size(); j++)
+				{
+					configManager.unsetConfiguration(CONFIG_GROUP, gk + "_sound_" + j);
+					configManager.unsetConfiguration(CONFIG_GROUP, gk + "_volume_" + j);
+				}
 			}
 		}
 		weaponEntries.removeIf(e -> e.getItemId() == itemId);
 		configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_name");
+		configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_enabled");
 		configManager.unsetConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_groupCount");
 		saveWeaponIds();
 
@@ -440,11 +477,14 @@ public class CustomWeaponSfxPlugin extends Plugin
 					continue;
 				}
 
-				weaponEntries.add(new WeaponEntry(
+				WeaponEntry newEntry = new WeaponEntry(
 					itemId,
 					name != null ? name : "Weapon #" + itemId,
 					groups
-				));
+				);
+				String enabledStr = configManager.getConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_enabled");
+				if (enabledStr != null) newEntry.setEnabled(Boolean.parseBoolean(enabledStr));
+				weaponEntries.add(newEntry);
 			}
 			catch (NumberFormatException e)
 			{
@@ -482,31 +522,26 @@ public class CustomWeaponSfxPlugin extends Plugin
 
 	private void addDefaultGroup(List<TriggerGroup> list, String prefix, Set<Triggers> defaultTriggers)
 	{
-		TriggerGroup group = new TriggerGroup(defaultTriggers, "", 75, 100);
+		List<SoundEntry> sounds = new ArrayList<>();
+		sounds.add(new SoundEntry("", 75));
+		TriggerGroup group = new TriggerGroup(defaultTriggers, sounds, 100);
 		list.add(group);
 		configManager.setConfiguration(CONFIG_GROUP, prefix + "_groupCount", 1);
 		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_triggers",
 			TriggerGroup.serializeTriggers(group.getTriggers()));
-		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_sound", group.getSoundFile());
-		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_volume", group.getVolume());
 		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_chance", group.getChance());
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_soundCount", 1);
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_sound_0", sounds.get(0).getSoundFile());
+		configManager.setConfiguration(CONFIG_GROUP, prefix + "_group_0_volume_0", sounds.get(0).getVolume());
 	}
 
 	private TriggerGroup loadGroup(String keyPrefix)
 	{
 		String triggersStr = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_triggers");
-		String sound = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_sound");
-		String volStr = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_volume");
-		String chanceStr = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_chance");
+		String chanceStr   = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_chance");
+		String soundCountStr = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_soundCount");
 
 		Set<Triggers> triggers = TriggerGroup.deserializeTriggers(triggersStr);
-
-		int vol = 75;
-		if (volStr != null)
-		{
-			try { vol = Integer.parseInt(volStr); }
-			catch (NumberFormatException ignored) {}
-		}
 
 		int chance = 100;
 		if (chanceStr != null)
@@ -515,7 +550,27 @@ public class CustomWeaponSfxPlugin extends Plugin
 			catch (NumberFormatException ignored) {}
 		}
 
-		return new TriggerGroup(triggers, sound != null ? sound : "", vol, chance);
+		List<SoundEntry> sounds = new ArrayList<>();
+		int soundCount = 1;
+		if (soundCountStr != null)
+		{
+			try { soundCount = Integer.parseInt(soundCountStr); }
+			catch (NumberFormatException ignored) {}
+		}
+		for (int j = 0; j < soundCount; j++)
+		{
+			String sf = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_sound_" + j);
+			String vs = configManager.getConfiguration(CONFIG_GROUP, keyPrefix + "_volume_" + j);
+			int vol = 75;
+			if (vs != null)
+			{
+				try { vol = Integer.parseInt(vs); }
+				catch (NumberFormatException ignored) {}
+			}
+			sounds.add(new SoundEntry(sf != null ? sf : "", vol));
+		}
+
+		return new TriggerGroup(triggers, sounds, chance);
 	}
 
 	private void saveWeaponIds()
@@ -547,7 +602,12 @@ public class CustomWeaponSfxPlugin extends Plugin
 			int chance = group.getChance();
 			if (chance <= 0) continue;
 			if (chance < 100 && ThreadLocalRandom.current().nextInt(100) >= chance) continue;
-			playSoundFile(group.getSoundFile(), group.getVolume());
+			List<SoundEntry> sounds = group.getSounds();
+			if (sounds.isEmpty()) continue;
+			SoundEntry se = sounds.size() == 1
+				? sounds.get(0)
+				: sounds.get(ThreadLocalRandom.current().nextInt(sounds.size()));
+			playSoundFile(se.getSoundFile(), se.getVolume());
 		}
 	}
 
@@ -583,11 +643,17 @@ public class CustomWeaponSfxPlugin extends Plugin
 		for (int i = 0; i < groups.size(); i++)
 		{
 			TriggerGroup g = groups.get(i);
-			configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_triggers",
+			String gk = "specWeapon_" + itemId + "_group_" + i;
+			configManager.setConfiguration(CONFIG_GROUP, gk + "_triggers",
 				TriggerGroup.serializeTriggers(g.getTriggers()));
-			configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_sound", g.getSoundFile());
-			configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_volume", g.getVolume());
-			configManager.setConfiguration(CONFIG_GROUP, "specWeapon_" + itemId + "_group_" + i + "_chance", g.getChance());
+			configManager.setConfiguration(CONFIG_GROUP, gk + "_chance", g.getChance());
+			List<SoundEntry> se = g.getSounds();
+			configManager.setConfiguration(CONFIG_GROUP, gk + "_soundCount", se.size());
+			for (int j = 0; j < se.size(); j++)
+			{
+				configManager.setConfiguration(CONFIG_GROUP, gk + "_sound_" + j, se.get(j).getSoundFile());
+				configManager.setConfiguration(CONFIG_GROUP, gk + "_volume_" + j, se.get(j).getVolume());
+			}
 		}
 	}
 

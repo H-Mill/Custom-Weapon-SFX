@@ -285,7 +285,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		nameBlock.setBackground(bg);
 
 		JLabel nameLabel = new JLabel(entry.getWeaponName());
-		nameLabel.setForeground(Color.WHITE);
+		nameLabel.setForeground(entry.isEnabled() ? Color.WHITE : Color.GRAY);
 		nameLabel.setFont(nameLabel.getFont().deriveFont(Font.BOLD, 12f));
 		nameBlock.add(Box.createVerticalGlue());
 		nameBlock.add(nameLabel);
@@ -293,9 +293,26 @@ public class CustomWeaponSfxPanel extends PluginPanel
 
 		headerRow.add(nameBlock, BorderLayout.CENTER);
 
-		JButton removeBtn = new JButton("Remove");
+		JPanel eastBlock = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+		eastBlock.setBackground(bg);
+
+		JCheckBox enabledBox = new JCheckBox();
+		enabledBox.setSelected(entry.isEnabled());
+		enabledBox.setBackground(bg);
+		enabledBox.setToolTipText("Enable or disable this weapon");
+		enabledBox.addActionListener(e ->
+		{
+			entry.setEnabled(enabledBox.isSelected());
+			nameLabel.setForeground(entry.isEnabled() ? Color.WHITE : Color.GRAY);
+			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+				"specWeapon_" + entry.getItemId() + "_enabled", entry.isEnabled());
+		});
+		eastBlock.add(enabledBox);
+
+		JButton removeBtn = new JButton("✕");
 		removeBtn.setMargin(new java.awt.Insets(2, 5, 2, 5));
 		removeBtn.setForeground(Color.RED);
+		removeBtn.setToolTipText("Remove weapon");
 		removeBtn.addActionListener(e ->
 		{
 			int confirm = JOptionPane.showConfirmDialog(
@@ -307,7 +324,9 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			);
 			if (confirm == JOptionPane.YES_OPTION) onRemoveWeapon.accept(entry.getItemId());
 		});
-		headerRow.add(removeBtn, BorderLayout.EAST);
+		eastBlock.add(removeBtn);
+
+		headerRow.add(eastBlock, BorderLayout.EAST);
 
 		panel.add(headerRow);
 
@@ -366,21 +385,22 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			groupHeader.setBackground(ColorScheme.DARK_GRAY_COLOR);
 			groupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-			JLabel groupLabel = new JLabel("Sound " + (i + 1));
+			JLabel groupLabel = new JLabel("Sound Group " + (i + 1));
 			groupLabel.setForeground(ColorScheme.BRAND_ORANGE);
 			groupLabel.setFont(groupLabel.getFont().deriveFont(Font.BOLD, 11f));
 			groupHeader.add(groupLabel, BorderLayout.WEST);
 
 			if (groups.size() > 1)
 			{
-				JButton removeGroupBtn = new JButton("Remove");
+				JButton removeGroupBtn = new JButton("✕");
 				removeGroupBtn.setMargin(new java.awt.Insets(2, 5, 2, 5));
 				removeGroupBtn.setForeground(Color.RED);
+				removeGroupBtn.setToolTipText("Remove sound group");
 				removeGroupBtn.addActionListener(e ->
 				{
 					int confirm = JOptionPane.showConfirmDialog(
 						this,
-						"Remove Sound " + (idx + 1) + "?",
+						"Remove Sound Group " + (idx + 1) + "?",
 						"Remove Sound Group",
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.WARNING_MESSAGE
@@ -393,13 +413,17 @@ public class CustomWeaponSfxPanel extends PluginPanel
 				groupHeader.add(removeGroupBtn, BorderLayout.EAST);
 			}
 
+			JPanel soundsHolder = new JPanel();
+			soundsHolder.setLayout(new javax.swing.BoxLayout(soundsHolder, javax.swing.BoxLayout.Y_AXIS));
+			soundsHolder.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			soundsHolder.setAlignmentX(Component.LEFT_ALIGNMENT);
+			rebuildSoundsHolder(soundsHolder, group, availableSounds, onSave);
+
 			groupPanel.add(groupHeader);
 			groupPanel.add(Box.createVerticalStrut(4));
-			groupPanel.add(buildGroupSoundRow(group, availableSounds, onSave));
-			groupPanel.add(Box.createVerticalStrut(4));
-			groupPanel.add(buildVolumeRowGroup(group, onSave));
-			groupPanel.add(Box.createVerticalStrut(4));
 			groupPanel.add(buildChanceRowGroup(group, onSave));
+			groupPanel.add(Box.createVerticalStrut(4));
+			groupPanel.add(soundsHolder);
 			groupPanel.add(Box.createVerticalStrut(4));
 			groupPanel.add(buildTriggersPanel(group.getTriggers(), onSave, visibleTriggers));
 
@@ -410,10 +434,13 @@ public class CustomWeaponSfxPanel extends PluginPanel
 
 		holder.add(Box.createVerticalStrut(4));
 		JButton addGroupBtn = new JButton("+ Add Sound Group");
+		addGroupBtn.setToolTipText("Add a new sound group with its own triggers, chance, and sounds");
 		addGroupBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
 		addGroupBtn.addActionListener(e ->
 		{
-			groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), "", 75, 100));
+			List<SoundEntry> newSounds = new ArrayList<>();
+			newSounds.add(new SoundEntry("", 75));
+			groups.add(new TriggerGroup(EnumSet.noneOf(Triggers.class), newSounds, 100));
 			onSave.run();
 			rebuildGroupsSection(holder, groups, availableSounds, onSave, visibleTriggers);
 		});
@@ -433,6 +460,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		JLabel lbl = new JLabel("Triggers:");
 		lbl.setForeground(Color.WHITE);
 		lbl.setAlignmentX(Component.LEFT_ALIGNMENT);
+		lbl.setToolTipText("Which hit outcomes cause this sound group to play");
 		panel.add(lbl);
 		panel.add(Box.createVerticalStrut(2));
 
@@ -456,47 +484,93 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		return panel;
 	}
 
-	private JPanel buildGroupSoundRow(TriggerGroup group, List<String> availableSounds, Runnable onSave)
+	private void rebuildSoundsHolder(JPanel holder, TriggerGroup group,
+		List<String> availableSounds, Runnable onSave)
 	{
-		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-		row.setBackground(ColorScheme.DARK_GRAY_COLOR);
-		row.setAlignmentX(Component.LEFT_ALIGNMENT);
-		JLabel lbl = new JLabel("Sound:");
-		lbl.setForeground(Color.WHITE);
-		row.add(lbl);
+		holder.removeAll();
+		List<SoundEntry> sounds = group.getSounds();
 
-		String[] options = buildSoundOptions(availableSounds);
-		JComboBox<String> box = new JComboBox<>(options);
-		box.setPreferredSize(new Dimension(85, box.getPreferredSize().height));
-		box.setSelectedItem(configToDisplay(group.getSoundFile()));
-
-		box.addActionListener(e ->
+		for (int j = 0; j < sounds.size(); j++)
 		{
-			String sel = (String) box.getSelectedItem();
-			group.setSoundFile(displayToConfig(sel));
-			onSave.run();
-		});
-		row.add(box);
+			final int idx = j;
+			SoundEntry se = sounds.get(j);
 
-		JButton testBtn = new JButton("▶");
-		testBtn.setMargin(new java.awt.Insets(2, 5, 2, 5));
-		testBtn.setToolTipText("Test sound");
-		testBtn.addActionListener(e -> onTestSound.accept(displayToConfig((String) box.getSelectedItem()), group.getVolume()));
-		row.add(testBtn);
-		return row;
+			JPanel soundRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+			soundRow.setBackground(ColorScheme.DARK_GRAY_COLOR);
+			soundRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JLabel lbl = new JLabel("Sound:");
+			lbl.setForeground(Color.WHITE);
+			lbl.setToolTipText("Sound file to play. Built-in sounds are bundled with the plugin; custom sounds load from .runelite/customweaponsfx/");
+			soundRow.add(lbl);
+
+			String[] options = buildSoundOptions(availableSounds);
+			JComboBox<String> box = new JComboBox<>(options);
+			box.setPreferredSize(new Dimension(85, box.getPreferredSize().height));
+			box.setSelectedItem(configToDisplay(se.getSoundFile()));
+			box.addActionListener(e ->
+			{
+				se.setSoundFile(displayToConfig((String) box.getSelectedItem()));
+				onSave.run();
+			});
+			soundRow.add(box);
+
+			JButton testBtn = new JButton("▶");
+			testBtn.setMargin(new java.awt.Insets(2, 5, 2, 5));
+			testBtn.setToolTipText("Test sound");
+			testBtn.addActionListener(e -> onTestSound.accept(
+				displayToConfig((String) box.getSelectedItem()), se.getVolume()));
+			soundRow.add(testBtn);
+
+			if (sounds.size() > 1)
+			{
+				JButton removeBtn = new JButton("✕");
+				removeBtn.setMargin(new java.awt.Insets(2, 4, 2, 4));
+				removeBtn.setForeground(Color.RED);
+				removeBtn.setToolTipText("Remove this sound");
+				removeBtn.addActionListener(e ->
+				{
+					sounds.remove(idx);
+					onSave.run();
+					rebuildSoundsHolder(holder, group, availableSounds, onSave);
+				});
+				soundRow.add(removeBtn);
+			}
+
+			holder.add(soundRow);
+			holder.add(buildVolumeSoundEntry(se, onSave));
+
+			if (j < sounds.size() - 1)
+				holder.add(Box.createVerticalStrut(4));
+		}
+
+		holder.add(Box.createVerticalStrut(2));
+		JButton addSoundBtn = new JButton("+ Add Sound");
+		addSoundBtn.setToolTipText("Add another sound to this group — one will be picked at random when the group fires");
+		addSoundBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
+		addSoundBtn.addActionListener(e ->
+		{
+			sounds.add(new SoundEntry("", 75));
+			onSave.run();
+			rebuildSoundsHolder(holder, group, availableSounds, onSave);
+		});
+		holder.add(addSoundBtn);
+
+		holder.revalidate();
+		holder.repaint();
 	}
 
-	private JPanel buildVolumeRowGroup(TriggerGroup group, Runnable onSave)
+	private JPanel buildVolumeSoundEntry(SoundEntry se, Runnable onSave)
 	{
 		JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 		row.setBackground(ColorScheme.DARK_GRAY_COLOR);
 		row.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel lbl = new JLabel("Volume:");
 		lbl.setForeground(Color.WHITE);
+		lbl.setToolTipText("Playback volume for this sound (0 = silent, 100 = full volume)");
 		row.add(lbl);
-		JSlider slider = new JSlider(0, 100, group.getVolume());
+		JSlider slider = new JSlider(0, 100, se.getVolume());
 		slider.setPreferredSize(new Dimension(100, 20));
-		JLabel val = new JLabel(group.getVolume() + "%");
+		JLabel val = new JLabel(se.getVolume() + "%");
 		val.setForeground(Color.LIGHT_GRAY);
 		slider.addChangeListener(e ->
 		{
@@ -504,7 +578,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 			val.setText(v + "%");
 			if (!slider.getValueIsAdjusting())
 			{
-				group.setVolume(v);
+				se.setVolume(v);
 				onSave.run();
 			}
 		});
@@ -520,6 +594,7 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		row.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JLabel lbl = new JLabel("Chance:");
 		lbl.setForeground(Color.WHITE);
+		lbl.setToolTipText("Probability that this sound group plays when its trigger fires (100 = always, 0 = never)");
 		row.add(lbl);
 		JSlider slider = new JSlider(0, 100, group.getChance());
 		slider.setPreferredSize(new Dimension(100, 20));
@@ -549,15 +624,21 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		for (int i = 0; i < groups.size(); i++)
 		{
 			TriggerGroup g = groups.get(i);
+			String gk = "specWeapon_" + itemId + "_group_" + i;
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				"specWeapon_" + itemId + "_group_" + i + "_triggers",
-				TriggerGroup.serializeTriggers(g.getTriggers()));
+				gk + "_triggers", TriggerGroup.serializeTriggers(g.getTriggers()));
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				"specWeapon_" + itemId + "_group_" + i + "_sound", g.getSoundFile());
+				gk + "_chance", g.getChance());
+			List<SoundEntry> se = g.getSounds();
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				"specWeapon_" + itemId + "_group_" + i + "_volume", g.getVolume());
-			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				"specWeapon_" + itemId + "_group_" + i + "_chance", g.getChance());
+				gk + "_soundCount", se.size());
+			for (int j = 0; j < se.size(); j++)
+			{
+				configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+					gk + "_sound_" + j, se.get(j).getSoundFile());
+				configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+					gk + "_volume_" + j, se.get(j).getVolume());
+			}
 		}
 	}
 
@@ -568,15 +649,21 @@ public class CustomWeaponSfxPanel extends PluginPanel
 		for (int i = 0; i < groups.size(); i++)
 		{
 			TriggerGroup g = groups.get(i);
+			String gk = prefix + "_group_" + i;
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				prefix + "_group_" + i + "_triggers",
-				TriggerGroup.serializeTriggers(g.getTriggers()));
+				gk + "_triggers", TriggerGroup.serializeTriggers(g.getTriggers()));
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				prefix + "_group_" + i + "_sound", g.getSoundFile());
+				gk + "_chance", g.getChance());
+			List<SoundEntry> se = g.getSounds();
 			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				prefix + "_group_" + i + "_volume", g.getVolume());
-			configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
-				prefix + "_group_" + i + "_chance", g.getChance());
+				gk + "_soundCount", se.size());
+			for (int j = 0; j < se.size(); j++)
+			{
+				configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+					gk + "_sound_" + j, se.get(j).getSoundFile());
+				configManager.setConfiguration(CustomWeaponSfxPlugin.CONFIG_GROUP,
+					gk + "_volume_" + j, se.get(j).getVolume());
+			}
 		}
 	}
 
