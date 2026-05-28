@@ -172,10 +172,10 @@ public class CustomWeaponSfxPlugin extends Plugin
 			boolean specHitsplatSeen = false;
 			for (PendingAttack attack : pendingAttacks.values())
 			{
-				boolean anyMax  = attack.isMaxList.contains(true);
+				boolean allMax  = attack.isMaxList.stream().allMatch(b -> b);
 				boolean anyHit  = attack.amounts.stream().anyMatch(a -> a > 0);
 				boolean allZero = attack.amounts.stream().allMatch(a -> a == 0);
-				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, anyMax);
+				fireMatchingGroups(attack.groups, attack.wasSpec, anyHit, allZero, allMax);
 				if (attack.wasSpec) specHitsplatSeen = true;
 			}
 			pendingAttacks.clear();
@@ -514,7 +514,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 	}
 
 	private void fireMatchingGroups(List<TriggerGroup> groups, boolean wasSpec,
-									boolean anyHit, boolean allZero, boolean anyMax)
+									boolean anyHit, boolean allZero, boolean allMax)
 	{
 		for (TriggerGroup group : groups)
 		{
@@ -524,7 +524,7 @@ public class CustomWeaponSfxPlugin extends Plugin
 			boolean matches = false;
 			for (Triggers trigger : triggers)
 			{
-				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, anyMax))
+				if (matchesTrigger(trigger, wasSpec, anyHit, allZero, allMax))
 				{
 					matches = true;
 					break;
@@ -536,17 +536,17 @@ public class CustomWeaponSfxPlugin extends Plugin
 	}
 
 	private static boolean matchesTrigger(Triggers trigger, boolean wasSpec,
-										   boolean anyHit, boolean allZero, boolean anyMax)
+										   boolean anyHit, boolean allZero, boolean allMax)
 	{
 		switch (trigger)
 		{
-			case REGULAR_ZERO: return !wasSpec && allZero && !anyMax;
-			case REGULAR_HIT:  return !wasSpec && anyHit && !anyMax;
-			case REGULAR_MAX:  return !wasSpec && anyMax;
-			case SPECIAL_ZERO: return wasSpec && allZero && !anyMax;
-			case SPECIAL_HIT:  return wasSpec && anyHit && !anyMax;
-			case SPECIAL_MAX:  return wasSpec && anyMax;
-			case ALL:          return anyHit && !anyMax;
+			case REGULAR_ZERO: return !wasSpec && allZero;
+			case REGULAR_HIT:  return !wasSpec && anyHit && !allMax;
+			case REGULAR_MAX:  return !wasSpec && allMax;
+			case SPECIAL_ZERO: return wasSpec && allZero;
+			case SPECIAL_HIT:  return wasSpec && anyHit && !allMax;
+			case SPECIAL_MAX:  return wasSpec && allMax;
+			case ALL:          return anyHit;
 			default:           return false;
 		}
 	}
